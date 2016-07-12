@@ -50,9 +50,9 @@ def listKeysInBucket(bucket):
 
 def removeFromBucket(bucket,keyName):
         for obj in bucket.objects.all():
-               if(obj.key == fileName):
-                   bucket.delete_key(obj.key)
-                   return 0
+               if(obj.key == keyName):
+                   response = bucket.delete_objects(Delete={'Objects': [{'Key': keyName}]})
+                   return response
         return -1
 
 def main():
@@ -74,7 +74,14 @@ def main():
 	print
 	print('Again listing the keys...')
 	listKeysInBucket(scrumBucket)
+	print('Removing test file...')
+        removeFromBucket(scrumBucket, 'test.txt')
+        
+        print('Again listing the keys...')
+        listKeysInBucket(scrumBucket)
 	
+	print
+	print('Now starting directory listen...CTRL+Z to end')
 	event_handler = DirEventHandler()
 	observer = Observer()
 	observer.schedule(event_handler,PHOTO_DIR,recursive=True)
