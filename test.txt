@@ -1,1 +1,283 @@
-this R2 unit has a bad motivator
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+from socketIO_client import SocketIO, BaseNamespace
+from Crypto.Cipher import AES
+from base64 import b64decode
+from cerevoice_eng import *
+import json
+import subprocess
+import curses
+import time
+import os
+import locale
+import requests
+import sys
+import logging
+
+logging.getLogger("requests").setLevel(logging.ERROR)
+logging.basicConfig(level=logging.ERROR)
+
+reload(sys)
+sys.setdefaultencoding('utf8')
+
+#urlBase = 'http://axiom.ngrok.io'
+url2Base = 'http://direct.axiommarkets.com'
+urlBase = url2Base + ':12381'
+stdscr = None
+key = 'BBDA20DF21792057759F79DEA6B9A90F'
+iv = 'FE604ECC0131BCD7'
+os.environ["SDL_FBDEV"] = "/dev/fb1"
+
+def show_status(status):	
+	stat = json.loads(status)
+	off = 13
+	
+	if 'global_view_only' in stat:
+		if stat['global_view_only']:
+			stdscr.addstr(18,off, "ACTIVE ", curses.color_pair(1))
+		else:
+			stdscr.addstr(18,off, "OFF    ", curses.color_pair(2))
+	if 'api_has_error' in stat:
+		if stat['api_has_error']:			
+			stdscr.addstr(19,off, "ERROR  ", curses.color_pair(1))
+		else:
+			stdscr.addstr(19,off, "GOOD   ", curses.color_pair(2))
+	if 'apply_global_addon' in stat:
+		if stat['apply_global_addon']:
+			stdscr.addstr(20,off, "ACTIVE ", curses.color_pair(1))
+		else:
+			stdscr.addstr(20,off, "OFF    ", curses.color_pair(2))
+	if 'apply_global_addon' in stat:
+		stdscr.addstr(21,off, str(stat['global_addon_value']), curses.color_pair(3))
+
+	#stdscr.refresh()
+	
+def show_pnl(pnl):
+	tmp = int(float(pnl))
+	clr = 1 if tmp < 0 else 2
+	val = str(abs(tmp)).zfill(7)
+
+	stdscr.addstr(11,0, " ___  " + nums[int(val[0])][0] + ' ' + nums[int(val[1])][0] + nums[int(val[2])][0] + nums[int(val[3])][0] + ' ' + nums[int(val[4])][0] + nums[int(val[5])][0] + nums[int(val[6])][0], curses.color_pair(clr))
+	stdscr.addstr(12,0, "(||   " + nums[int(val[0])][1] + ' ' + nums[int(val[1])][1] + nums[int(val[2])][1] + nums[int(val[3])][1] + ' ' + nums[int(val[4])][1] + nums[int(val[5])][1] + nums[int(val[6])][1] + '  00', curses.color_pair(clr))
+	stdscr.addstr(13,0, "_||)  " + nums[int(val[0])][2] + ',' + nums[int(val[1])][2] + nums[int(val[2])][2] + nums[int(val[3])][2] + ',' + nums[int(val[4])][2] + nums[int(val[5])][2] + nums[int(val[6])][2] + ' .', curses.color_pair(clr))
+	stdscr.refresh()
+
+def show_idle():
+	stdscr.addstr(8,17,  "       _ ___  _    ____", curses.color_pair(4))
+	stdscr.addstr(9,17,  "       | |  \ |    |___", curses.color_pair(4))
+	stdscr.addstr(10,17, "       | |__/ |___ |___", curses.color_pair(4))
+	stdscr.refresh()
+
+def show_armed():
+ 	stdscr.addstr(8,17,  "____ ____ _  _ ___ ___ ", curses.color_pair(1))                                         
+	stdscr.addstr(9,17,  "|__| |__/ |\/| |__ |  " + '\\', curses.color_pair(1))
+	stdscr.addstr(10,17, "|  | |  \ |  | |__ |__/", curses.color_pair(1))
+	stdscr.refresh()
+
+def show_online():
+	stdscr.addstr(0,0, "****************************************", curses.color_pair(2))                                         
+	stdscr.addstr(1,0, "*   ___  _   _ _     ___ _   _ _____   *", curses.color_pair(2))
+	stdscr.addstr(2,0, "*  / _ \| \ | | |   |_ _| \ | | ____|  *", curses.color_pair(2))
+	stdscr.addstr(3,0, "* | | | |  \| | |    | ||  \| |  _|    *", curses.color_pair(2))
+	stdscr.addstr(4,0, "* | |_| | |\  | |___ | || |\  | |__    *", curses.color_pair(2))
+	stdscr.addstr(5,0, "*  \___/|_| \_|_____|___|_| \_|_____|  *", curses.color_pair(2))
+	stdscr.addstr(6,0, "*                                      *", curses.color_pair(2))
+ 	stdscr.addstr(7,0, "****************************************", curses.color_pair(2))
+	stdscr.addstr(17,0, "----------------------------------------", curses.color_pair(2))
+	for i in range(0,12):
+		stdscr.addstr(17 + i,20, "|", curses.color_pair(2))
+	stdscr.addstr(28,0, "----------------------------------------", curses.color_pair(2))
+	stdscr.refresh()
+
+def show_offline():
+ 	stdscr.addstr(0,0, "****************************************", curses.color_pair(1))                                         
+	stdscr.addstr(1,0, "* ___  ____  _____ _     ___ _   _ ____*", curses.color_pair(1))
+	stdscr.addstr(2,0, "*/ _ \|  ___|  ___| |   |_ _| \ | | ___*", curses.color_pair(1))
+	stdscr.addstr(3,0, "| | | | |_  | |_  | |    | ||  \| |  _|*", curses.color_pair(1))
+	stdscr.addstr(4,0, "| |_| |  _| |  _| | |___ | || |\  | |__*", curses.color_pair(1))
+	stdscr.addstr(5,0, "*\___/|_|   |_|   |_____|___|_| \_|____*", curses.color_pair(1))
+	stdscr.addstr(6,0, "*                                      *", curses.color_pair(1))
+ 	stdscr.addstr(7,0, "****************************************", curses.color_pair(1))
+	stdscr.addstr(17,0, "----------------------------------------", curses.color_pair(1))
+	for i in range(0,12):
+		stdscr.addstr(17 + i,20, "|", curses.color_pair(1))
+	stdscr.addstr(28,0, "----------------------------------------", curses.color_pair(1))
+	stdscr.refresh()
+
+def on_trade_create(*args):
+    subprocess.Popen(['omxplayer','-b','gong.mp3'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+    show_idle()
+    stdscr.addstr(19,21, "[" + time.strftime("%X") + "]", curses.color_pair(3))
+    stdscr.refresh()
+    curses.flash()
+
+def on_rfq_create(*args):
+    rfq = json.loads(dc(args[0]))
+    if rfq['active']:
+        show_armed()
+        subprocess.Popen(['omxplayer','-b','sg.mp3'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+    else:
+		show_idle()
+		subprocess.Popen(['omxplayer','-b','wah.mp3'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+
+def on_usage_create(*args):
+	use = json.loads(dc(args[0]))
+	cpu = use['cpu']
+	tmp = int(float(cpu) * 10)
+	val = str(abs(tmp)).zfill(3)
+
+	stdscr.addstr(14,1, nums[int(val[0])][0] + nums[int(val[1])][0]  + ' ' + nums[int(val[2])][0] + '    ', curses.color_pair(3))
+	stdscr.addstr(15,1, nums[int(val[0])][1] + nums[int(val[1])][1]  + ' ' + nums[int(val[2])][1] + '  0/', curses.color_pair(3))
+	stdscr.addstr(16,1, nums[int(val[0])][2] + nums[int(val[1])][2]  + '.' + nums[int(val[2])][2] + '  /0', curses.color_pair(3))
+	
+	mem = int(use['memory']);
+	tmp = int(float(mem) / 1000000)
+	val = str(abs(tmp)).zfill(3)
+	
+	stdscr.addstr(14,19, nums[int(val[0])][0] + nums[int(val[1])][0] + nums[int(val[2])][0] + '      __ ', curses.color_pair(3))
+	stdscr.addstr(15,19, nums[int(val[0])][1] + nums[int(val[1])][1] + nums[int(val[2])][1] + ' |\/||__) ', curses.color_pair(3))
+	stdscr.addstr(16,19, nums[int(val[0])][2] + nums[int(val[1])][2] + nums[int(val[2])][2] + ' |  ||__)', curses.color_pair(3))	
+	
+	stdscr.refresh()
+
+def on_status_update(*args):
+	show_status(dc(args[0]))
+	
+def on_pnl_create(*args):
+	show_pnl(dc(args[0]))
+
+def on_user_create(*args):
+	use = json.loads(dc(args[0]))
+	#print use	
+	if (use['active']):
+		sayit("<s><voice emotion='happy'>Attention! User " + str(use['first_name']) + " " + str(use['last_name']) + " has logged in.</voice></s>")
+	else:
+		sayit("<s><voice emotion='sad'>Attention! User " + str(use['first_name']) + " " + str(use['last_name']) + " has logged out.</voice></s>")
+	
+class Namespace(BaseNamespace):
+	def on_connect(*args):
+		subprocess.Popen(['omxplayer','-b','ooh.mp3'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+		show_online()
+		#print('[Connected]')
+	def on_disconnect(*args):
+		show_offline()
+		#print('[disConnected]')
+	def on_reconnect(*args):
+		subprocess.Popen(['omxplayer','-b','ooh.mp3'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)  
+		show_online()
+		#print('[reconnected]')
+	def on_error(*args):
+		show_offline()
+		#print('[error]')
+
+def sayit(input):
+	eng = CPRCEN_engine_load("license.lic", "speaker.voice")
+	chan = CPRCEN_engine_open_default_channel(eng)
+	CPRCEN_engine_channel_to_file(eng, chan, "out.wav", CPRCEN_RIFF)
+	CPRCEN_engine_channel_speak(eng, chan, input, len(input), 1)
+	CPRCEN_engine_delete(eng)
+	subprocess.Popen(['omxplayer','-b','out.wav'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)  
+
+
+def dc(input):
+	dypt = AES.new(key=key, mode=AES.MODE_CBC, IV=iv)
+	if input.startswith('"') and input.endswith('"'):
+		input = input[1:-1]
+	dctxt = dypt.decrypt(input.decode('hex'))
+	return dctxt[:-ord(dctxt[-1])]
+
+def main(screen):
+	curses.initscr()
+	curses.noecho()
+	curses.cbreak()
+	global stdscr;
+	stdscr = screen
+
+	socketIO = SocketIO(url2Base, 12381, Namespace)
+	socketIO.on('monitor/status updated', on_status_update)
+	socketIO.on('monitor/trades created', on_trade_create)
+	socketIO.on('monitor/rfqs created', on_rfq_create)
+	socketIO.on('monitor/usage created', on_usage_create)
+	socketIO.on('monitor/pnl created', on_pnl_create)
+	socketIO.on('monitor/users created', on_user_create)
+
+	curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
+	curses.init_pair(2, curses.COLOR_GREEN, curses.COLOR_BLACK)
+	curses.init_pair(3, curses.COLOR_WHITE, curses.COLOR_BLACK)
+	curses.init_pair(4, curses.COLOR_CYAN, curses.COLOR_BLACK)
+	curses.init_pair(5, curses.COLOR_MAGENTA, curses.COLOR_BLACK)
+
+	stdscr.addstr(8,0,  "____ _   _ ____  ", curses.color_pair(3))
+	stdscr.addstr(9,0,  "[__   \_/  [__  .", curses.color_pair(3))
+	stdscr.addstr(10,0, "___]   |   ___] .", curses.color_pair(3))
+	show_idle()
+
+	r = requests.get(urlBase + '/monitor/pnl')
+	show_pnl(dc(r.text))
+	
+	stdscr.addstr(18,21, "LAST TRADES:", curses.color_pair(3))
+	stdscr.addstr(19,30, "\o/", curses.color_pair(5))
+	stdscr.addstr(20,30, " | ", curses.color_pair(5))
+	stdscr.addstr(21,30, "/ " + '\\', curses.color_pair(5))
+	stdscr.addstr(18,0, "GLOBAL VO  : ", curses.color_pair(3))
+	stdscr.addstr(19,0, "API STATE  : PENDING", curses.color_pair(3))
+	stdscr.addstr(20,0, "GLOBAL ADD : PENDING", curses.color_pair(3))
+	stdscr.addstr(21,0, "GLOBAL TCK : ", curses.color_pair(3))
+	
+	r = requests.get(urlBase + '/monitor/status')
+	show_status(dc(r.text))
+	
+	
+	curses.curs_set(0)                                         
+	stdscr.refresh()
+	socketIO.wait()
+	curses.nocbreak()
+	curses.echo()
+	curses.endwin()
+
+nums = {0: {0 : ' __ ',
+	    1 : ('/  ' + '\\'),
+	    2 : '\__/',
+	   },
+	1: {0 : '    ',
+	    1 : '  /|',
+	    2 : '   |',
+	   },
+	2: {0 : ' __ ',
+	    1 : '  _)',
+	    2 : ' /__',
+	   },
+	3: {0 : ' __ ',
+	    1 : '  _)',
+	    2 : ' __)',
+	   },
+	4: {0 : '    ',
+	    1 : '|__|',
+	    2 : '   |',
+	   },
+	5: {0 : '  __',
+	    1 : ' |_ ',
+	    2 : ' __)',
+	   },
+	6: {0 : ' __ ',
+	    1 : '/__ ',
+	    2 : '\__)',
+	   },
+	7: {0 : ' ___',
+	    1 : '   /',
+	    2 : '  / ',
+	   },
+	8: {0 : ' __ ',
+	    1 : '(__)',
+	    2 : '(__)',
+	   },
+	9: {0 : ' __ ',
+	    1 : ('(__' + '\\'),
+	    2 : ' __/',
+	   },	
+	}
+
+if __name__ == '__main__':
+	curses.wrapper(main)
+	#main(None)
