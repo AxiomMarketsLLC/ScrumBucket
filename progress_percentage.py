@@ -1,4 +1,4 @@
-import os, threading
+import os, sys, threading
 class ProgressPercentage(object):
     def __init__(self, filename):
         self._filename = filename
