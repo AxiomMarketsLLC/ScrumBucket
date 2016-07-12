@@ -2,14 +2,14 @@
 
 # Import the SDK
 import boto3
+import botocore
 import uuid
+from progress_percentage import ProgressPercentage
 
 BUCKET = 'scrum'
 
 
 def getBucketName(s3):
-
-        print('Finding the scrum bucket....')
         bucketList = getBucketList(s3)
 	
 	sbIndex = findBucketIndex(BUCKET, bucketList)
@@ -35,13 +35,27 @@ def findBucketIndex(bucketName, bucketList):
               		return i
     	return -1
 
+def storeInBucket(bucket, filePath, storageKey):
+	 bucket.upload_file(filePath, storageKey)
+
+def listKeysInBucket(bucket):
+	for obj in bucket.objects.all():
+		print(obj.key)
+
 def main():
 	
 	print('Connecting to s3...')
         s3 = boto3.resource('s3')
+	print('Getting the scrum bucket...')
         bucketName = getBucketName(s3)
-
-        
+	scrumBucket = s3.Bucket(bucketName)
+	print('Listing the keys in our bucket...')
+	listKeysInBucket(scrumBucket)
+        print('Trying to upload our test file...')
+	storeInBucket(scrumBucket, './test.txt', 'test.txt')
+	
+	print('Again listing the keys...')
+	listKeysInBucket(scrumBucket)
 	
 	
 		
