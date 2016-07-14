@@ -4,27 +4,30 @@
 import boto3
 import botocore
 import uuid
+from progress_percentage import ProgressPercentage
 import time
 import datetime
 import logging
 import threading
 from subprocess32 import Popen, PIPE, STDOUT
+import sys
+from Tkinter import *
 
-from progress_percentage import ProgressPercentage
+
 from watchdog.observers import Observer
 from dir_event_handler import DirEventHandler
-
-import sys
-
 BUCKET = 'scrum'
 PHOTO_DIR = '/home/pi/ScrumBucket/'
-DEBUG = True
+DEBUG = False
 TEST_FILE = './test.txt'
 TEST_KEY = 'test.txt'
 CMD = './camera.sh'
 CONNECT_CMD = 'c\n'
 REC_MODE_CMD = 'rec\n'
 REM_SHOOT_CMD = 'rs\n'
+ERR_MSG = 'ERROR'
+SUCCESS_MSG = 'SUCCESS'
+ALREADY_REC_MSG = 'already in rec mode'
 DELAY = 20 #interval in seconds for pics
 KEY = "scrumImage"
 
@@ -80,21 +83,36 @@ def removeFromBucket(bucket,keyName):
                    return response
         return -1
 
-def closeIfError(process):
-	
-	for line in iter(process.stdout.readline,''):
+def closeIfError(process, label):
+	while(True):
+		for line in iter(process.stderr.readline,''):
    	
-		print("Camera out: " + line)
-   		if(line.find("ERROR") != -1):
-			print("ERROR!")
-			#process.stdin.close()
-			#sys.exit(-1)
+			print("Camera err: " + line)
+   			if(line.find(ERR_MSG) != -1 and line.find(ALREADY_REC_MSG)==-1):
+				label['bg']='red'
+				label['text']=ERR_MSG
 
+def photoLoop(process, bucket, errThread, widget,tk, event_handler):
+        time.sleep(1)
+        process.stdin.write(CONNECT_CMD)
+        time.sleep(1)
+        process.stdin.write(REC_MODE_CMD)
+        time.sleep(1)
+
+	process.stdin.write(REM_SHOOT_CMD)
+	time.sleep(5)
+        key = KEY + " " + str(datetime.datetime.now())
+        imagePath = event_handler.getImage()
+        if(imagePath != -1):
+		storeInBucket(bucket,imagePath,key)
+		widget['text']= SUCCESS_MSG
+		widget['bg']='green' 
+	tk.after(DELAY*1000, lambda: threading.Thread(photoLoop(process,bucket,errThread,widget,tk,event_handler)).start())
 def main():
 	if DEBUG:
 		logging.basicConfig(level=logging.DEBUG)
-
-	print('Connecting to s3...')
+	
+	print("Connecting to s3...")
         s3 = boto3.resource('s3')
 
 	print('Getting the scrum bucket...')
@@ -104,36 +122,24 @@ def main():
 	if DEBUG:
 		testBucketFunctions(scrumBucket)
 
- 	
+ 	root = Tk()
+	
+	msg ="Wait for it"
+	label = Label(root, text=msg, width=50, height=25, bg="grey")
+        label.pack() 
+	
         event_handler = DirEventHandler()
         observer = Observer()
         observer.schedule(event_handler,PHOTO_DIR,recursive=True)
         observer.start()
 	
-	cam = Popen([CMD],stdin=PIPE,stdout=PIPE)
-	readCam = threading.Thread(target=closeIfError, args=(cam,))
+	cam = Popen([CMD],stdin=PIPE, stderr=PIPE)
+	readCam = threading.Thread(target=closeIfError, args=(cam,label))
 	readCam.start()
-	
-	time.sleep(1)
-	cam.stdin.write(CONNECT_CMD)
-	time.sleep(1)
-	cam.stdin.write(REC_MODE_CMD)
-	time.sleep(1)
-	
-	try:
-		while True:
-			cam.stdin.write(REM_SHOOT_CMD)
-			time.sleep(DELAY/2)
-    			key = KEY + " " + str(datetime.datetime.now())	
-			imagePath = event_handler.getImage()
-			if(imagePath != -1):
-				threading.Thread(storeInBucket(scrumBucket, imagePath, key)).start()
-			time.sleep(DELAY/2)
-	except:
-		print("Ending...")
-		cam.stdin.close()
 		
-		
+	root.after(2000, lambda: threading.Thread(photoLoop(cam,scrumBucket,readCam,label,root,event_handler)).start())
+
+	root.mainloop()
 if __name__ == "__main__":
     main()
 
