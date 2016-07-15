@@ -21,9 +21,9 @@ from dir_event_handler import DirEventHandler
 BUCKET = 'scrum'
 PHOTO_DIR = '/home/pi/ScrumBucket/'
 DEBUG = False
-TEST_FILE = './test.txt'
+TEST_FILE = '/home/pi/test.txt'
 TEST_KEY = 'test.txt'
-CMD = '/home/pi/ScrumBucket/camera.sh'
+CMD = PHOTO_DIR+'camera.sh'
 CONNECT_CMD = 'c\n'
 REC_MODE_CMD = 'rec\n'
 REM_SHOOT_CMD = 'rs\n'
@@ -32,7 +32,6 @@ SUCCESS_MSG = 'SUCCESS'
 LATEST_NAME = 'latest'
 EXTENSION = '.jpg'
 ALREADY_REC_MSG = 'already in rec'
-DELAY = 20 #interval in seconds for pics
 KEY = "scrumImage"
 INTERFACE = 'eth0' #change to wlan0 for wifi operation
 VERSION = '0.1.0'
@@ -102,7 +101,12 @@ def closeIfError(process, label):
    			if(line.find(ERR_MSG) != -1 and line.find(ALREADY_REC_MSG)==-1):
 				label['bg']='red'
 				label['text']=ERR_MSG
-def photoLoop(s3, process, bucket, errThread, widget,tk, event_handler):
+def setInterval(interval):
+	timeOptions = {"20 secs":20,"1 min":60,"15 mins":900, "30 mins":1800,"1 hour":3600}
+	delay = timeOptions[interval.get()]
+	return delay
+
+def photoLoop(s3, process, bucket, errThread, label,interval,tk, event_handler):
         time.sleep(1)
         process.stdin.write(CONNECT_CMD)
         time.sleep(1)
@@ -116,11 +120,11 @@ def photoLoop(s3, process, bucket, errThread, widget,tk, event_handler):
         if(imagePath != -1):
 		storeInBucket(bucket,imagePath,key)
 		copyKeyInBucket(s3, bucket, key, LATEST_NAME+EXTENSION)
-		widget['text']= SUCCESS_MSG
-		widget['bg']='green' 
+		label['text']= SUCCESS_MSG
+		label['bg']='green' 
 		if DEBUG:
 			listKeysInBucket(bucket)
-	tk.after(DELAY*1000, lambda: threading.Thread(photoLoop(s3, process,bucket,errThread,widget,tk,event_handler)).start())
+	tk.after(setInterval(interval)*1000, lambda: threading.Thread(photoLoop(s3, process,bucket,errThread,label,interval,tk,event_handler)).start())
 def main():
 	if DEBUG:
 		logging.basicConfig(level=logging.DEBUG)
@@ -136,14 +140,18 @@ def main():
 		testBucketFunctions(scrumBucket)
 
  	root = Tk()
-	
+	root.minsize(width=320, height=240)
+	root.maxsize(width=320, height=240)
 	msg ="Wait for it"
-	label = Label(root, text=msg, width=50, height=25, bg="grey")
-        label.pack() 
+	label = Label(root, text=msg,width=10, height=5,bg="grey") 
+	label.pack(side=TOP)
 	iplabel = Label(root, text='IP: '+getIP(INTERFACE))
-	iplabel.pack()
+	iplabel.pack(side=TOP)
 	vers_label = Label(root, text='VERSION: '+VERSION)
-	vers_label.pack()
+	vers_label.pack(side=TOP)
+
+	interval = Spinbox(root,values=["20 secs", "1 min", "15 mins", "30 mins", "1 hour"])
+	interval.pack()     
         event_handler = DirEventHandler()
         observer = Observer()
         observer.schedule(event_handler,PHOTO_DIR,recursive=True)
@@ -153,7 +161,7 @@ def main():
 	readCam = threading.Thread(target=closeIfError, args=(cam,label))
 	readCam.start()
 		
-	root.after(2000, lambda: threading.Thread(photoLoop(s3, cam,scrumBucket,readCam,label,root,event_handler)).start())
+	root.after(setInterval(interval)*1000, lambda: threading.Thread(photoLoop(s3, cam,scrumBucket,readCam,label,interval,root,event_handler)).start())
 
 	root.mainloop()
 if __name__ == "__main__":
