@@ -14,6 +14,7 @@ import socket
 import fcntl
 import struct
 from Tkinter import *
+import tkFont
 
 
 from watchdog.observers import Observer
@@ -93,12 +94,13 @@ def removeFromBucket(bucket,keyName):
                    response = bucket.delete_objects(Delete={'Objects': [{'Key': keyName}]})
                    return response
         return -1
-def closeIfError(process, label):
+def closeIfError(process,root, label):
 	while(True):
 		for line in iter(process.stderr.readline,''):
    	
 			print("Camera err: " + line)
    			if(line.find(ERR_MSG) != -1 and line.find(ALREADY_REC_MSG)==-1):
+				root['bg']='red'
 				label['bg']='red'
 				label['text']=ERR_MSG
 def setInterval(interval):
@@ -121,7 +123,8 @@ def photoLoop(s3, process, bucket, errThread, label,interval,tk, event_handler):
 		storeInBucket(bucket,imagePath,key)
 		copyKeyInBucket(s3, bucket, key, LATEST_NAME+EXTENSION)
 		label['text']= SUCCESS_MSG
-		label['bg']='green' 
+		label['bg']='green'
+		tk['bg']='green' 
 		if DEBUG:
 			listKeysInBucket(bucket)
 	tk.after(setInterval(interval)*1000, lambda: threading.Thread(photoLoop(s3, process,bucket,errThread,label,interval,tk,event_handler)).start())
@@ -150,7 +153,7 @@ def main():
 	vers_label = Label(root, text='VERSION: '+VERSION)
 	vers_label.pack(side=TOP)
 
-	interval = Spinbox(root,values=["20 secs", "1 min", "15 mins", "30 mins", "1 hour"])
+	interval = Spinbox(root,values=["20 secs", "1 min", "15 mins", "30 mins", "1 hour"],wrap = True, font = tkFont.Font(size=18))
 	interval.pack()     
         event_handler = DirEventHandler()
         observer = Observer()
@@ -158,7 +161,7 @@ def main():
         observer.start()
 	
 	cam = Popen([CMD],stdin=PIPE, stderr=PIPE)
-	readCam = threading.Thread(target=closeIfError, args=(cam,label))
+	readCam = threading.Thread(target=closeIfError, args=(cam,root,label))
 	readCam.start()
 		
 	root.after(setInterval(interval)*1000, lambda: threading.Thread(photoLoop(s3, cam,scrumBucket,readCam,label,interval,root,event_handler)).start())
