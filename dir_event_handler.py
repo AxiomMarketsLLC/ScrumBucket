@@ -13,8 +13,6 @@ class DirEventHandler(FileSystemEventHandler):
 	
 	def __init__(self, app):
 		super(DirEventHandler,self).__init__()
-		self.hasImage=False
-		self.lastPath=""
 		self.app=app
 
 	def catch_all_handler(self, event):
@@ -22,7 +20,7 @@ class DirEventHandler(FileSystemEventHandler):
 		print('Caught new file event')
 		if (event.src_path.find('.jpg') != -1):
 			print(event.src_path)
-			threading.Thread(app.uploadImage(event.src_path)).start()
+			threading.Thread(self.app.uploadImage(event.src_path)).start()
 		
 
 	def on_moved(self, event):
