@@ -86,7 +86,7 @@ class PhotoApp():
         	vers_label.pack(side=TOP)
 
                 takePicButton = Button(self.root, text="SHOOT", command=self.snapPicture)
-                takePicButton.pack(SIDE=TOP)
+                takePicButton.pack(side=TOP)
 
 	        self.interval = Spinbox(self.root,values=TIME_OPTIONS.keys(),wrap = True, font = tkFont.Font(size=18))
         	self.interval.pack()
