@@ -42,6 +42,12 @@ VERSION = '0.1.0'
 TIME_OPTIONS = {"20 secs":20,"1 min":60,"15 mins":900, "30 mins":1800,"1 hour":3600}
 
 
+#Macros for key names
+LATEST_NAME = 'latest'
+EXTENSION = '.jpg'
+KEY = "scrumImage"
+
+
 #credit: http://code.activestate.com/recipes/439094-get-the-ip-address-associated-with-a-network-inter/
 def getIP(interface):
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -170,6 +176,17 @@ class PhotoApp():
                 time.sleep(1)
                 self.cam.stdin.write(REM_SHOOT_CMD)
 
+	def uploadImage(self, filePath):
+		key = (KEY + " " + str(datetime.datetime.now()) + EXTENSION).replace(" ","")
+                self.storeInBucket(filePath,key)
+                self.copyKeyInBucket(key, LATEST_NAME+EXTENSION)
+                self.uiLock.acquire()
+                self.label['text']= 'SUCCESS'
+                self.label['bg']='green'
+                self.root['bg']='green'
+                self.uiLock.release()
+
+	
 	def photoLoop(self):
         	self.snapPicture()      
 

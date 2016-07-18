@@ -5,14 +5,9 @@
 import logging
 import sys
 import time
-import datetime
+
 from watchdog.events import FileSystemEventHandler
 import threading
-#Macros for key names
-LATEST_NAME = 'latest'
-EXTENSION = '.jpg'
-KEY = "scrumImage"
-
 
 class DirEventHandler(FileSystemEventHandler):
 	
@@ -27,16 +22,7 @@ class DirEventHandler(FileSystemEventHandler):
 		print('Caught new file event')
 		if (event.src_path.find('.jpg') != -1):
 			print(event.src_path)
-			threading.Thread(self.uploadImage(event)).start()
-	def uploadImage(self, event):
-		key = (KEY + " " + str(datetime.datetime.now()) + EXTENSION).replace(" ","")
-                self.app.storeInBucket(event.src_path,key)
-                self.app.copyKeyInBucket(key, LATEST_NAME+EXTENSION)
-                self.app.uiLock.acquire()
-                self.app.label['text']= 'SUCCESS'
-                self.app.label['bg']='green'
-                self.app.root['bg']='green'
-                self.app.uiLock.release()
+			threading.Thread(app.uploadImage(event.src_path)).start()
 		
 
 	def on_moved(self, event):
