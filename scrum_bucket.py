@@ -35,15 +35,10 @@ ERR_MSG = 'ERROR'
 SUCCESS_MSG = 'SUCCESS'
 ALREADY_REC_MSG='already in rec'
 
-#Macros for key names
-LATEST_NAME = 'latest'
-EXTENSION = '.jpg'
-KEY = "scrumImage"
-
-
 INTERFACE = 'eth0' #change to wlan0 for wifi operation
 VERSION = '0.1.0'
 
+#Options for UI interval widget
 TIME_OPTIONS = {"20 secs":20,"1 min":60,"15 mins":900, "30 mins":1800,"1 hour":3600}
 
 
@@ -90,9 +85,12 @@ class PhotoApp():
 	        vers_label = Label(self.root, text='VERSION: '+VERSION)
         	vers_label.pack(side=TOP)
 
+                takePicButton = Button(self.root, text="SHOOT", command=self.snapPicture)
+                takePicButton.pack(SIDE=TOP)
+
 	        self.interval = Spinbox(self.root,values=TIME_OPTIONS.keys(),wrap = True, font = tkFont.Font(size=18))
         	self.interval.pack()
-	        self.event_handler = DirEventHandler()
+	        self.event_handler = DirEventHandler(self)
         	observer = Observer()
 	        observer.schedule(self.event_handler,PHOTO_DIR,recursive=True)
 	        observer.start()
@@ -101,7 +99,7 @@ class PhotoApp():
 	        self.errorThread = threading.Thread(target=self.checkForError)
         	self.errorThread.start()
 
-	        self.root.after(self.getInterval()*1000, lambda: threading.Thread(self.photoLoop()).start())
+		self.root.after(1, lambda: threading.Thread(self.photoLoop()).start())
 		self.root.mainloop()
 	
 
@@ -164,69 +162,20 @@ class PhotoApp():
 	def getInterval(self):
 		delay = TIME_OPTIONS[self.interval.get()]
 		return delay
+	
+	def snapPicture(self):
+	        self.cam.stdin.write(CONNECT_CMD)
+                time.sleep(1)
+                self.cam.stdin.write(REC_MODE_CMD)
+                time.sleep(1)
+                self.cam.stdin.write(REM_SHOOT_CMD)
 
 	def photoLoop(self):
-        	time.sleep(1)
-        	self.cam.stdin.write(CONNECT_CMD)
-        	time.sleep(1)
-        	self.cam.stdin.write(REC_MODE_CMD)
-        	time.sleep(1)
+        	self.snapPicture()      
 
-		self.cam.stdin.write(REM_SHOOT_CMD)
-		time.sleep(5)
-        	key = (KEY + " " + str(datetime.datetime.now()) + EXTENSION).replace(" ","")
-	        imagePath = self.event_handler.getImage()
-        	if(imagePath != -1):
-			self.storeInBucket(imagePath,key)
-			self.copyKeyInBucket(key, LATEST_NAME+EXTENSION)
-			self.uiLock.acquire()
-			self.label['text']= SUCCESS_MSG
-			self.label['bg']='green'
-			self.root['bg']='green' 
-			self.uiLock.release()
-			if self.debug:
+		if self.debug:
 				self.listKeysInBucket()
 		self.root.after(self.getInterval()*1000, lambda: threading.Thread(self.photoLoop()).start())
-#def main():
-#	if DEBUG:
-#		logging.basicConfig(level=logging.DEBUG)
-#
-#	print("Connecting to s3...")
-#       s3 = boto3.resource('s3')
-
-#	print('Getting the scrum bucket...')
-#       bucketName = getBucketName(s3)
-#	scrumBucket = s3.Bucket(bucketName)
-        
-#	if DEBUG:
-#		testBucketFunctions(scrumBucket)
-
-# 	root = Tk()
-#	root.minsize(width=320, height=240)
-#	root.maxsize(width=320, height=240)
-#	msg ="Wait for it"
-	
-#	label = Label(root, text=msg,width=10, height=5) 
-#	label.pack(side=TOP)
-#	iplabel = Label(root, text='IP: '+getIP(INTERFACE))
-#	iplabel.pack(side=TOP)
-#	vers_label = Label(root, text='VERSION: '+VERSION)
-#	vers_label.pack(side=TOP)
-
-#	interval = Spinbox(root,values=["20 secs", "1 min", "15 mins", "30 mins", "1 hour"],wrap = True, font = tkFont.Font(size=18))
-#	interval.pack()     
-#       event_handler = DirEventHandler()
-#       observer = Observer()
-#       observer.schedule(event_handler,PHOTO_DIR,recursive=True)
-#       observer.start()
-	
-#	cam = Popen([CMD],stdin=PIPE, stderr=PIPE)
-#	readCam = threading.Thread(target=closeIfError, args=(cam,root,label))
-#	readCam.start()
-		
-#	root.after(setInterval(interval)*1000, lambda: threading.Thread(photoLoop(s3, cam,scrumBucket,readCam,label,interval,root,event_handler)).start())
-
-#	root.mainloop()
 if __name__ == "__main__":
 	photoApp = PhotoApp('scrum')
 
